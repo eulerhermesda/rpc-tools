@@ -1,7 +1,7 @@
 
 // This function generates the right dat
-function generate(_from,_to,_data){
-	return '{"jsonrpc":"2.0","method": "eth_sendTransaction", "params": [{"from": "' + _from +'", "to": '+ _to +', "data":'+ _data +' }], "id": 8}';
+function generate(_from,_to,_data,_type){
+	return '{"jsonrpc":"2.0","method": "'+ _type +'", "params": [{"from": "' + _from +'", "to": "'+ _to +'", "data": "'+ _data +'" }], "id": 8}';
 
 }
 
@@ -30,7 +30,7 @@ function unlockAccount(_account,_pwd){
 function sendTransaction(_from,_to,data, callback){
 	var http = new XMLHttpRequest();
 	var url = "http://127.0.0.1:8545";
-	var params = generate(_from,_to,data);
+	var params = generate(_from,_to,data,"eth_sendTransaction");
 	console.log(params);
 	http.open("POST", url, true);
 	
@@ -44,6 +44,22 @@ function sendTransaction(_from,_to,data, callback){
 	http.send(params);
 }
 
+function sendCall(_from,_to,data, callback){
+	var http = new XMLHttpRequest();
+	var url = "http://127.0.0.1:8545";
+	var params = generate(_from,_to,data,"eth_call");
+	console.log(params);
+	http.open("POST", url, true);
+	
+	//Send the proper header information along with the request
+	//http.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+
+	http.onreadystatechange = function(){callback(http);};
+	
+	//Let's unlock the account before sending the transaction
+	unlockAccount(_from,"test")
+	http.send(params);
+}
 
 
 class Contract{	
@@ -67,31 +83,40 @@ class Contract{
 					argsName[index]=this.abi[i].inputs[j].name;
 					argsType[index]=this.abi[i].inputs[j].type;
 					index++;
+					
 				}
 			}
 
 
 			// adding the body of the function
 			var args = argsName;
-			var funcHash = this.generateFunctionHash(funcname);
+			var funcHash = this.generateFunctionHash(funcname,argsType);
+			var funcType = this.abi[i].constant?'sendCall':'sendTransaction'
 
-			args[args.length] = 'var funcString="";'+
-								'var string = "";'+
-								'for (var i = 0; i < arguments.length  ; i ++){'+
-
-									'var tmp = "0000000" + arguments[i].toString();'+
-									'tmp = tmp.substring(tmp.length-6,tmp.length);'+
-
-									'string = string + tmp;'+
-								'}'+
-								'string="000000000000000000000000000000000000000000000000000000" + string;'+
-								'funcString = funcString + string.substring(string.length-64,string.length);'+
-
-								'sendTransaction(account,this.address,generate(account,this.address,funcstring),function(http) {'+		
+			var tmpCode = 'var funcString="";'+
+						'var string = "";';
+			
+			for (var j=0; j < args.length;j++){
+				if (argsType[j] == "address"){
+					tmpCode = tmpCode +
+					'var tmp = "0000000000000000000000000000000000000000000000000000000000000000" + arguments['+j+'].toString().substring(2,);'+
+					'tmp = tmp.substring(tmp.length-64,tmp.length);'+
+					'string = string + tmp;'
+				}
+				else{
+					tmpCode = tmpCode +
+					'var tmp = "0000000000000000000000000000000000000000000000000000000000000000" + arguments['+j+'].toString();'+
+					'tmp = tmp.substring(tmp.length-64,tmp.length);'+
+					'string = string + tmp;'
+				}
+			}
+								
+			tmpCode = tmpCode +	'funcString = "0x'+funcHash+'"+ string;'+
+								funcType+'(currentAccount,this.address,funcString,function(http) {'+		
 									    'if(http.readyState == 4 && http.status == 200) {'+
 									       ' console.log(http.responseText);'+
 									   ' }});';
-
+			args[args.length]=tmpCode
 
 			this[funcname] = Function.apply(null,args);
 
@@ -117,10 +142,22 @@ class Contract{
 
 	
 
-	generateFunctionHash(funcName){
+	generateFunctionHash(funcName,type){
 		var shaObj = new jsSHA("SHA3-512", "TEXT");
 		shaObj.update(funcName)
-		return shaObj.getHash("HEX").substring(0,10);
+		shaObj.update('(')
+		for (var i=0; i < type.length;i++ ){
+			if (type[i] == 'uint')
+				shaObj.update('uint256');
+			else
+				shaObj.update(type[i])
+			if (i != type.length -1){
+				shaObj.update(',')
+			}
+			
+		}
+		shaObj.update(')')
+		return shaObj.getHash("HEX").substring(0,8);
 	}
 }
 
@@ -136,15 +173,15 @@ function testArguments(){
 	var string = "";
 	for (var i = 0; i < arguments.length  ; i ++){
 
-		var tmp = "0000000" + arguments[i].toString()
-		tmp = tmp.substring(tmp.length-6,tmp.length)
+		var tmp = "0000000000000000000000000000000000000000000000000000000000000000" + arguments[i].toString()
+		tmp = tmp.substring(tmp.length-64,tmp.length)
 
 		string = string + tmp;
 	}
-	string="000000000000000000000000000000000000000000000000000000" + string
-	funcString = funcString + string.substring(string.length-64,string.length)
+	string="0000000000000000000000000000000000000000000000000000000000000000" + string
+	funcString = '0x'+funcString + string.substring(string.length-64,string.length)
 
-	sendTransaction(account,this.address,generate(account,this.address,funcstring),function(http) {//Call a function when the state changes.		
+	sendTransaction(currentAccount,contract.address,funcString,function(http) {//Call a function when the state changes.		
 		    if(http.readyState == 4 && http.status == 200) {
 		        console.log(http.responseText);
 		    }})
