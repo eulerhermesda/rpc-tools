@@ -73,28 +73,27 @@ class Contract{
 
 			// adding the body of the function
 			var args = argsName;
-			var funcHash = generateFunctionHash(funcname);
+			var funcHash = this.generateFunctionHash(funcname);
 
-			args[args.length] = 'var funcString=""'+
+			args[args.length] = 'var funcString="";'+
 								'var string = "";'+
 								'for (var i = 0; i < arguments.length  ; i ++){'+
 
-									'var tmp = "0000000" + arguments[i].toString()'+
-									'tmp = tmp.substring(tmp.length-6,tmp.length)'+
+									'var tmp = "0000000" + arguments[i].toString();'+
+									'tmp = tmp.substring(tmp.length-6,tmp.length);'+
 
 									'string = string + tmp;'+
 								'}'+
-								'string="000000000000000000000000000000000000000000000000000000" + string'+
-								'funcString = funcString + string.substring(string.length-64,string.length)'+
+								'string="000000000000000000000000000000000000000000000000000000" + string;'+
+								'funcString = funcString + string.substring(string.length-64,string.length);'+
 
 								'sendTransaction(account,this.address,generate(account,this.address,funcstring),function(http) {'+		
 									    'if(http.readyState == 4 && http.status == 200) {'+
 									       ' console.log(http.responseText);'+
-									   ' }})';
+									   ' }});';
 
 
-
-			this[funcname] = Function.apply(null,args)
+			this[funcname] = Function.apply(null,args);
 
 		}
 	}
@@ -119,8 +118,8 @@ class Contract{
 	
 
 	generateFunctionHash(funcName){
-		var shaObj = new jsSHA("SHA-512", "TEXT");
-		shaObj.update(funcname)
+		var shaObj = new jsSHA("SHA3-512", "TEXT");
+		shaObj.update(funcName)
 		return shaObj.getHash("HEX").substring(0,10);
 	}
 }
