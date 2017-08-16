@@ -1,7 +1,7 @@
 
 // This function generates the right dat
 function generate(_from,_to,_data,_type){
-	return '{"jsonrpc":"2.0","method": "'+ _type +'", "params": [{"from": "' + _from +'", "to": "'+ _to +'", "data": "'+ _data +'" }], "id": 8}';
+	return '{"jsonrpc":"2.0","method": "'+ _type +'", "params": [{"from": "' + _from +'", "to": "'+ _to +'", "data": "'+ _data +'" },"latest"], "id": 1}';
 
 }
 
@@ -99,7 +99,7 @@ class Contract{
 			for (var j=0; j < args.length;j++){
 				if (argsType[j] == "address"){
 					tmpCode = tmpCode +
-					'var tmp = "0000000000000000000000000000000000000000000000000000000000000000" + arguments['+j+'].toString().substring(2,);'+
+					'var tmp = "0000000000000000000000000000000000000000000000000000000000000000" + arguments['+j+'].toString().substr(-40);'+
 					'tmp = tmp.substring(tmp.length-64,tmp.length);'+
 					'string = string + tmp;'
 				}
@@ -144,19 +144,24 @@ class Contract{
 
 	generateFunctionHash(funcName,type){
 		var shaObj = new jsSHA("SHA3-512", "TEXT");
-		shaObj.update(funcName)
-		shaObj.update('(')
+		var tmp = funcName + '(';
+		
 		for (var i=0; i < type.length;i++ ){
 			if (type[i] == 'uint')
-				shaObj.update('uint256');
+				tmp=tmp+'uint256';
+			else if (type[i] == 'address')
+				tmp=tmp+'uint160';
 			else
-				shaObj.update(type[i])
+				tmp=tmp+type[i]
 			if (i != type.length -1){
-				shaObj.update(',')
+				tmp=tmp+','
 			}
 			
 		}
-		shaObj.update(')')
+		tmp=tmp+')';
+		//console.log(tmp)
+		shaObj.update(tmp)
+
 		return shaObj.getHash("HEX").substring(0,8);
 	}
 }
