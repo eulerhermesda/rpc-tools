@@ -129,15 +129,18 @@ class Contract{
 			if (this.abi[i].constant){
 				// If we have a call, the result of the operation is returned in the result field of the response
 			tmpCode = tmpCode +	'var response = JSON.parse(http.responseText);'+
-				'var res=[]'+
+				'var res=[];'+
+				'var err=undefined;'+				
 				'if (response.error){'+
 					'console.log(response);'+
+					'err = response.error;'+
 				'}'+
 				'else {'+
 					'for (var i=0; i<'+outputsType.length+';i++){'+
 						'res[i]="0x"+response.result.substring(2+64*i,66+64*i);'+
 					'}'+
-				'}';
+				'}'+
+				'callback(err,res);';
 				
 			}
 			tmpCode = tmpCode +	' console.log(http.responseText);'+
