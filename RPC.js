@@ -140,7 +140,7 @@ class Contract{
 						'res[i]="0x"+response.result.substring(2+64*i,66+64*i);'+
 					'}'+
 				'}'+
-				'callback(err,res);';
+				'arguments[arguments.length-1](err,res);';
 				
 			}
 			tmpCode = tmpCode +	' console.log(http.responseText);'+
