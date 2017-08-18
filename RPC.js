@@ -1,8 +1,8 @@
 
 // This function generates the right dat
 function generate(_from,_to,_data,_type){
-	return '{"jsonrpc":"2.0","method": "'+ _type +'", "params": [{"from": "' + _from +'", "to": "'+ _to +'", "data": "'+ _data +'" },"latest"], "id": 1}';
-
+	var extraParam = (_type == "eth_call")?',"latest"':''
+	return '{"jsonrpc":"2.0","method": "'+ _type +'", "params": [{"from": "' + _from +'", "to": "'+ _to +'", "data": "'+ _data +'" }'+ extraParam+', "id": 1}';
 }
 
 function unlockAccount(_account,_pwd){
@@ -14,7 +14,7 @@ function unlockAccount(_account,_pwd){
 	var params = '{"jsonrpc":"2.0","method":"personal_unlockAccount","params":["' + _account + '", "' + _pwd +'", 3600],"id":67}';
 	
 	http.open("POST", url, true);
-		http.onreadystatechange = function(){
+	http.onreadystatechange = function(){
 		if(http.readyState == 4 && http.status == 200) {
 			if (JSON.parse(http.responseText).hasOwnProperty("error")){
 				console.log(http.responseText);
@@ -82,9 +82,15 @@ class Contract{
 				if (this.abi[i].inputs[j].name != ""){
 					argsName[index]=this.abi[i].inputs[j].name;
 					argsType[index]=this.abi[i].inputs[j].type;
-					index++;
-					
+					index++;					
 				}
+			}
+
+			var index = 0;
+			for (var j=0; j<this.abi[i].outputs.length; j++){
+				outputsType[index] = this.abi[i].outputs[j].type;
+				outputsName[index] = this.abi[i].outputs[j].name;
+				index++;
 			}
 
 
@@ -92,6 +98,7 @@ class Contract{
 			var args = argsName;
 			var funcHash = this.generateFunctionHash(funcname,argsType);
 			var funcType = this.abi[i].constant?'sendCall':'sendTransaction'
+
 
 			var tmpCode = 'var funcString="";'+
 						'var string = "";';
@@ -111,15 +118,33 @@ class Contract{
 				}
 			}
 								
+			// Adding the callback function
+			//tmpCode = tmpCode + 'var callBackFunc = function(){arguments[arguments.length](err,res)}'
+
 			tmpCode = tmpCode +	'funcString = "0x'+funcHash+'"+ string;'+
 								funcType+'(currentAccount,this.address,funcString,function(http) {'+		
-									    'if(http.readyState == 4 && http.status == 200) {'+
-									       ' console.log(http.responseText);'+
+									    'if(http.readyState == 4 && http.status == 200) {';
+
+			// Code for handling the response from the RPC server here
+			if (this.abi[i].constant){
+				// If we have a call, the result of the operation is returned in the result field of the response
+			tmpCode = tmpCode +	'var response = JSON.parse(http.responseText);'+
+				'var res=[]'+
+				'if (response.error){'+
+					'console.log(response);'+
+				'}'+
+				'else {'+
+					'for (var i=0; i<'+outputsType.length+';i++){'+
+						'res[i]="0x"+response.result.substring(2+64*i,66+64*i);'+
+					'}'+
+				'}';
+				
+			}
+			tmpCode = tmpCode +	' console.log(http.responseText);'+
 									   ' }});';
 			args[args.length]=tmpCode
 
 			this[funcname] = Function.apply(null,args);
-
 		}
 	}
 
@@ -192,3 +217,12 @@ function testArguments(){
 		    }})
 	
 }
+
+function testCallback(callback){
+	callback(undefined,2);
+	
+}
+
+testCallback(function(err,res){
+	console.log(err,res)
+})
