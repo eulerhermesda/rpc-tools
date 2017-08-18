@@ -87,10 +87,14 @@ class Contract{
 			}
 
 			var index = 0;
-			for (var j=0; j<this.abi[i].outputs.length; j++){
-				outputsType[index] = this.abi[i].outputs[j].type;
-				outputsName[index] = this.abi[i].outputs[j].name;
-				index++;
+			var outputsType=[];
+			var outputsName=[];
+			if (this.abi[i].outputs){
+				for (var j=0; j<this.abi[i].outputs.length; j++){
+					outputsType[index] = this.abi[i].outputs[j].type;
+					outputsName[index] = this.abi[i].outputs[j].name;
+					index++;
+				}
 			}
 
 
@@ -221,11 +225,3 @@ function testArguments(){
 	
 }
 
-function testCallback(callback){
-	callback(undefined,2);
-	
-}
-
-testCallback(function(err,res){
-	console.log(err,res)
-})
