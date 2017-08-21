@@ -1,18 +1,49 @@
 
 // This function generates the right dat
-function generate(_from,_to,_data,_type){
+async function generate(_from,_to,_data,_type){
 	var extraParam = (_type == "eth_call")?',"latest"':''
-	return '{"jsonrpc":"2.0","method": "'+ _type +'", "params": [{"from": "' + _from +'", "to": "'+ _to +'", "data": "'+ _data +'" }'+ extraParam+', "id": 1}';
+	gas = await estimateGas(_from,_to,_data);
+	console.log(gas);
+	return '{"jsonrpc":"2.0","method": "'+ _type +'", "params": [{"from": "' + _from +'", "to": "'+ _to +'", "data": "'+ _data +'" }'+ extraParam+'], "id": 1}';
+}
+
+function estimateGas(_from,_to,_data){
+
+	return new Promise(function(resolve, reject){
+		var http = new XMLHttpRequest();
+		var url = "http://127.0.0.1:8545";
+		var params = '{"jsonrpc":"2.0","method": "eth_estimateGas", "params": [{"from": "' + _from +'", "to": "'+ _to +'", "data": "'+ _data +'" }], "id": 1}';
+		//console.log(params);
+		http.open("POST", url, true);
+
+		//Send the proper header information along with the request
+		//http.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+
+		http.onreadystatechange = function(){
+			if(http.readyState == 4 && http.status == 200) {
+				result = http.responseText;
+				result = JSON.parse(result);
+				result = result.result;
+				resolve(parseInt(result));
+			}
+		};
+
+		//Let's unlock the account before sending the transaction
+		
+
+		http.send(params);
+	});
+	
 }
 
 function unlockAccount(_account,_pwd){
-	// This function will unlock the account passed in parameter. 
+	// This function will unlock the account passed in parameter.
 	// The geth node should expose the personal API through the parameter --rcpapi="personal"
 
 	var http = new XMLHttpRequest();
 	var url = "http://127.0.0.1:8545";
 	var params = '{"jsonrpc":"2.0","method":"personal_unlockAccount","params":["' + _account + '", "' + _pwd +'", 3600],"id":67}';
-	
+
 	http.open("POST", url, true);
 	http.onreadystatechange = function(){
 		if(http.readyState == 4 && http.status == 200) {
@@ -21,50 +52,50 @@ function unlockAccount(_account,_pwd){
 			}
 			else
 				console.log("Account successfully unlocked")
-        
+
     }};
 	http.send(params);
 }
 
 // Send the transaction to the local RPC
-function sendTransaction(_from,_to,data, callback){
+function sendTransaction(_from,_to,data,cb, callback){// cb = original callback
 	var http = new XMLHttpRequest();
 	var url = "http://127.0.0.1:8545";
 	var params = generate(_from,_to,data,"eth_sendTransaction");
 	console.log(params);
 	http.open("POST", url, true);
-	
+
 	//Send the proper header information along with the request
 	//http.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
 
-	http.onreadystatechange = function(){callback(http);};
-	
+	http.onreadystatechange = function(){callback(http,cb);};
+
 	//Let's unlock the account before sending the transaction
 	unlockAccount(_from,"test")
 	http.send(params);
 }
 
-function sendCall(_from,_to,data, callback){
+function sendCall(_from,_to,data,cb, callback){// cb = original callback
 	var http = new XMLHttpRequest();
 	var url = "http://127.0.0.1:8545";
 	var params = generate(_from,_to,data,"eth_call");
 	console.log(params);
 	http.open("POST", url, true);
-	
+
 	//Send the proper header information along with the request
 	//http.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
 
-	http.onreadystatechange = function(){callback(http);};
-	
+	http.onreadystatechange = function(){callback(http,cb);};
+
 	//Let's unlock the account before sending the transaction
 	unlockAccount(_from,"test")
 	http.send(params);
 }
 
 
-class Contract{	
+class Contract{
 
-	constructor(){		
+	constructor(){
 		this.address = null;
 		this.abi = null;
 	}
@@ -82,7 +113,7 @@ class Contract{
 				if (this.abi[i].inputs[j].name != ""){
 					argsName[index]=this.abi[i].inputs[j].name;
 					argsType[index]=this.abi[i].inputs[j].type;
-					index++;					
+					index++;
 				}
 			}
 
@@ -104,9 +135,9 @@ class Contract{
 			var funcType = this.abi[i].constant?'sendCall':'sendTransaction'
 
 
-			var tmpCode = 'var funcString="";'+
+			var tmpCode = 'var funcString="";'+ 'console.log(arguments.length);' +
 						'var string = "";';
-			
+
 			for (var j=0; j < args.length;j++){
 				if (argsType[j] == "address"){
 					tmpCode = tmpCode +
@@ -121,12 +152,12 @@ class Contract{
 					'string = string + tmp;'
 				}
 			}
-								
+
 			// Adding the callback function
 			//tmpCode = tmpCode + 'var callBackFunc = function(){arguments[arguments.length](err,res)}'
 
 			tmpCode = tmpCode +	'funcString = "0x'+funcHash+'"+ string;'+
-								funcType+'(currentAccount,this.address,funcString,function(http) {'+		
+								funcType+'(currentAccount,this.address,funcString,arguments[arguments.length-1],function(http) {'+
 									    'if(http.readyState == 4 && http.status == 200) {';
 
 			// Code for handling the response from the RPC server here
@@ -134,7 +165,7 @@ class Contract{
 				// If we have a call, the result of the operation is returned in the result field of the response
 			tmpCode = tmpCode +	'var response = JSON.parse(http.responseText);'+
 				'var res=[];'+
-				'var err=undefined;'+				
+				'var err=undefined;'+
 				'if (response.error){'+
 					'console.log(response);'+
 					'err = response.error;'+
@@ -144,8 +175,8 @@ class Contract{
 						'res[i]="0x"+response.result.substring(2+64*i,66+64*i);'+
 					'}'+
 				'}'+
-				'arguments[arguments.length-1](err,res);';
-				
+				'console.log(arguments[arguments.length-1]); arguments[arguments.length-1](err,res);';
+
 			}
 			tmpCode = tmpCode +	' console.log(http.responseText);'+
 									   ' }});';
@@ -172,29 +203,28 @@ class Contract{
 		this.generateFunctions();
 	}
 
-	
+
 
 	generateFunctionHash(funcName,type){
-		var shaObj = new jsSHA("SHA3-512", "TEXT");
-		var tmp = funcName + '(';
 		
+		var tmp = funcName + '(';
+
 		for (var i=0; i < type.length;i++ ){
 			if (type[i] == 'uint')
 				tmp=tmp+'uint256';
-			else if (type[i] == 'address')
-				tmp=tmp+'uint160';
+			else if (type[i] == 'int')
+				tmp=tmp+'int256';
 			else
 				tmp=tmp+type[i]
 			if (i != type.length -1){
 				tmp=tmp+','
 			}
-			
+
 		}
 		tmp=tmp+')';
 		//console.log(tmp)
-		shaObj.update(tmp)
 
-		return shaObj.getHash("HEX").substring(0,8);
+		return keccak256(tmp).substring(0,8);
 	}
 }
 
@@ -218,10 +248,8 @@ function testArguments(){
 	string="0000000000000000000000000000000000000000000000000000000000000000" + string
 	funcString = '0x'+funcString + string.substring(string.length-64,string.length)
 
-	sendTransaction(currentAccount,contract.address,funcString,function(http) {//Call a function when the state changes.		
+	sendTransaction(currentAccount,contract.address,funcString,function(http) {//Call a function when the state changes.
 		    if(http.readyState == 4 && http.status == 200) {
 		        console.log(http.responseText);
 		    }})
-	
 }
-
