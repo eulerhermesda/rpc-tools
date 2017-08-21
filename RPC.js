@@ -1,10 +1,9 @@
 
 // This function generates the right dat
-async function generate(_from,_to,_data,_type){
-	var extraParam = (_type == "eth_call")?',"latest"':''
-	gas = await estimateGas(_from,_to,_data);
+function generate(_from,_to,_data,_type){
+	var extraParam = (_type == "eth_call")?',"latest"':''	
 	console.log(gas);
-	return '{"jsonrpc":"2.0","method": "'+ _type +'", "params": [{"from": "' + _from +'", "to": "'+ _to +'", "data": "'+ _data +'" }'+ extraParam+'], "id": 1}';
+	return '{"jsonrpc":"2.0","method": "'+ _type +'", "params": [{"from": "' + _from +'", "to": "'+ _to +'", "data": "'+ _data +'","gas":"' + gas + '" }'+ extraParam+'], "id": 1}';
 }
 
 function estimateGas(_from,_to,_data){
@@ -13,24 +12,17 @@ function estimateGas(_from,_to,_data){
 		var http = new XMLHttpRequest();
 		var url = "http://127.0.0.1:8545";
 		var params = '{"jsonrpc":"2.0","method": "eth_estimateGas", "params": [{"from": "' + _from +'", "to": "'+ _to +'", "data": "'+ _data +'" }], "id": 1}';
-		//console.log(params);
+		
 		http.open("POST", url, true);
-
-		//Send the proper header information along with the request
-		//http.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
 
 		http.onreadystatechange = function(){
 			if(http.readyState == 4 && http.status == 200) {
 				result = http.responseText;
 				result = JSON.parse(result);
 				result = result.result;
-				resolve(parseInt(result));
+				resolve(result);
 			}
 		};
-
-		//Let's unlock the account before sending the transaction
-		
-
 		http.send(params);
 	});
 	
@@ -58,10 +50,11 @@ function unlockAccount(_account,_pwd){
 }
 
 // Send the transaction to the local RPC
-function sendTransaction(_from,_to,data,cb, callback){// cb = original callback
+async function sendTransaction(_from,_to,data,cb, callback){// cb = original callback
 	var http = new XMLHttpRequest();
 	var url = "http://127.0.0.1:8545";
-	var params = generate(_from,_to,data,"eth_sendTransaction");
+	gas = await estimateGas(_from,_to,data);
+	var params = generate(_from,_to,data,"eth_sendTransaction",gas);
 	console.log(params);
 	http.open("POST", url, true);
 
@@ -75,10 +68,11 @@ function sendTransaction(_from,_to,data,cb, callback){// cb = original callback
 	http.send(params);
 }
 
-function sendCall(_from,_to,data,cb, callback){// cb = original callback
+async function sendCall(_from,_to,data,cb, callback){// cb = original callback
 	var http = new XMLHttpRequest();
 	var url = "http://127.0.0.1:8545";
-	var params = generate(_from,_to,data,"eth_call");
+	gas = await estimateGas(_from,_to,data);
+	var params = generate(_from,_to,data,"eth_call",gas);
 	console.log(params);
 	http.open("POST", url, true);
 
